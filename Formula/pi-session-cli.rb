@@ -1,34 +1,21 @@
 class PiSessionCli < Formula
   desc "Headless Pi Session Manager server with embedded web UI"
   homepage "https://github.com/Dwsy/pi-session-manager"
-  version "0.4.4"
+  url "https://github.com/Dwsy/pi-session-manager/archive/refs/tags/v0.4.5.tar.gz"
+  sha256 "f4c677e87345ec856e50a347806f099ad87d23c14c3d1b18e683fb4e4aca4522"
   license "MIT"
 
-  on_macos do
-    if Hardware::CPU.arm?
-      url "https://github.com/Dwsy/pi-session-manager/releases/download/v#{version}/pi-session-cli-macos-arm64.tar.gz"
-      sha256 "27d023d0f39c1a4ceff065136abe466468ee706d01ca250097e7b3e0886be6d5"
+  depends_on "node" => :build
+  depends_on "rust" => :build
 
-      def install
-        bin.install "pi-session-cli-macos-arm64" => "pi-session-cli"
-      end
-    else
-      url "https://github.com/Dwsy/pi-session-manager/releases/download/v#{version}/pi-session-cli-macos-x64.tar.gz"
-      sha256 "2b2623291e7b586c24f0998b2924abb5fa424996ca4eaafeaf723719418e728a"
+  def install
+    ENV["npm_config_yes"] = "true"
 
-      def install
-        bin.install "pi-session-cli-macos-x64" => "pi-session-cli"
-      end
-    end
-  end
+    system "npm", "ci"
+    system "npm", "run", "build"
+    system "cargo", "build", "--release", "-p", "pi-session-cli"
 
-  on_linux do
-    url "https://github.com/Dwsy/pi-session-manager/releases/download/v#{version}/pi-session-cli-linux-x64.tar.gz"
-    sha256 "52f24a70423e8210e47ca8874e00673cf76b576ad78c4b9646bc1a4b01f71f44"
-
-    def install
-      bin.install "pi-session-cli-linux-x64" => "pi-session-cli"
-    end
+    bin.install "target/release/pi-session-cli"
   end
 
   def caveats
@@ -46,6 +33,18 @@ class PiSessionCli < Formula
   end
 
   test do
-    assert_predicate bin/"pi-session-cli", :exist?
+    ENV["HOME"] = testpath
+    (testpath/"Library/Application Support").mkpath
+    (testpath/".config").mkpath
+
+    (testpath/"Library/Application Support/pi-session-manager.json").write <<~JSON
+      {"http_enabled":false}
+    JSON
+    (testpath/".config/pi-session-manager.json").write <<~JSON
+      {"http_enabled":false}
+    JSON
+
+    output = shell_output("#{bin}/pi-session-cli 2>&1")
+    assert_match "HTTP server is disabled", output
   end
 end
